@@ -1,11 +1,12 @@
 var User = require('../models/user');
+var Story = require('../models/story');
 var config = require('../../config');
 var secretKey = config.secretKey;
 var jsonwebtoken = require('jsonwebtoken');
 
 function createToken(user){
 	var token = jsonwebtoken.sign({
-		_id: user._id,
+		id: user._id,
 		name: user.name,
 		username: user.username
 	}, secretKey, {
@@ -70,6 +71,59 @@ module.exports = function(app, express){
 			}
 		});
 	});
+	
+	api.use(function(req,res,next){
+		console.log("Someone just logged in to our app");
+		var token = req.body.token || req.query.token || req.headers['x-access-token'];
+		// check if token exists
+		if (token) {
+			jsonwebtoken.verify(token,secretKey, function(err, decoded){
+				if (err) {
+					res.status(403).send({success: false, message: "Failed to authenticate user"});
+				} else {
+					//
+					req.decoded = decoded;					
+					next();
+				}
+			});
+		} else {
+			res.status(403).send({success: false, message: "No token provided"});
+		}
+	});
+	
+	// destination B // provide legitimate token
+	
+	api.route('/')
+		.post(function(req,res){
+			var story = new Story({
+				creator: req.decoded.id,
+				content: req.body.content,
+				
+			});
+			
+			story.save(function(err){
+				if (err) {
+					res.send(err);
+					return;
+				}
+				
+				res.json({message: "New story created"});
+			});
+		})
+		
+		.get(function(req, res){
+			Story.find({creator: req.decoded.id}, function(err, stories){
+				if(err){
+					req.send(err);
+					return;
+				}
+				res.json(stories);
+			});
+		});
+		
+	api.get('/me', function(req, res){
+		res.json(req.decoded)
+	});	
 	
 	return api;
 }
