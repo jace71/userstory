@@ -16,8 +16,18 @@ function createToken(user){
 	return token;
 }
 
-module.exports = function(app, express){
+module.exports = function(app, express, io){
 	var api = express.Router();
+	
+	api.get('/all_stories', function(req,res){
+		Story.find({}, function(err, stories){
+			if (err){
+				res.send(err);
+				return;
+			}
+			res.json(stories);
+		});
+	});
 	
 	api.post('/signup', function(req,res){
 		var user = new User({
@@ -26,13 +36,19 @@ module.exports = function(app, express){
 			password: req.body.password
 		});
 		
+		var token = createToken(user);
+		
 		user.save(function(err){
 			if (err) {
 				res.send(err);
 				return;
 			}
 			
-			res.json({message: 'User has been created'});
+			res.json({
+				success: true,
+				message: 'User has been created',
+				token: token
+			});
 		});
 	});
 	
@@ -50,7 +66,7 @@ module.exports = function(app, express){
 	api.post('/login', function(req,res){
 		User.findOne({
 			username: req.body.username
-		}).select('password').exec(function(err, user){
+		}).select('name username password').exec(function(err, user){
 			if (err) throw err;
 			
 			if (!user) {
@@ -101,12 +117,12 @@ module.exports = function(app, express){
 				
 			});
 			
-			story.save(function(err){
+			story.save(function(err, newStory){
 				if (err) {
 					res.send(err);
 					return;
 				}
-				
+				io.emit('story', newStory)
 				res.json({message: "New story created"});
 			});
 		})
